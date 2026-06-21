@@ -1,12 +1,13 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
-import { ArrowLeft, Download, RotateCcw, CheckCircle2, AlertTriangle, BookOpen, RefreshCw } from 'lucide-react'
+import { ArrowLeft, Download, CheckCircle2, AlertTriangle, BookOpen, RefreshCw } from 'lucide-react'
 import Link from 'next/link'
 import Sidebar from '@/components/layout/Sidebar'
 import Badge from '@/components/ui/Badge'
 import Button from '@/components/ui/Button'
-import { getCase, saveCase, type Case } from '@/lib/storage'
+import { getCase, updateCase } from '@/lib/db'
+import { type Case } from '@/lib/storage'
 import { parseDraft, type ParsedDraft, type DraftSection } from '@/lib/draft-parser'
 import { clsx } from 'clsx'
 
@@ -21,23 +22,25 @@ export default function CasePage() {
   const [regenSection, setRegenSection] = useState<string | null>(null)
   const [regenPrompt, setRegenPrompt] = useState('')
   const [regenLoading, setRegenLoading] = useState(false)
-  const [markingDone, setMarkingDone] = useState(false)
 
   useEffect(() => {
-    const caseData = getCase(id)
-    if (!caseData) { router.replace('/dashboard'); return }
-    setC(caseData)
-    if (caseData.draft) {
-      setParsed(parseDraft(caseData.draft))
-    }
+    getCase(id).then(data => {
+      if (!data) { router.replace('/dashboard'); return }
+      setC(data)
+      if (data.draft) setParsed(parseDraft(data.draft))
+    })
   }, [id, router])
+
+  async function handleMarkDone() {
+    if (!c) return
+    await updateCase(c.id, { status: 'done' })
+    setC({ ...c, status: 'done' })
+  }
 
   async function handleRegenSection(section: DraftSection) {
     if (!c) return
     setRegenLoading(true)
-
     const sectionPrompt = `다음 섹션을 다시 작성해 주세요:\n섹션 제목: ${section.title}\n원본 내용:\n${section.content}\n\n추가 지시: ${regenPrompt || '없음'}`
-
     try {
       const res = await fetch('/api/generate', {
         method: 'POST',
@@ -48,9 +51,7 @@ export default function CasePage() {
           additionalInstructions: `이 섹션만 ## SECTION: ${section.number}. ${section.title} 형식으로 작성하세요.`,
         }),
       })
-
       if (!res.ok || !res.body) throw new Error('재생성 실패')
-
       const reader = res.body.getReader()
       const decoder = new TextDecoder()
       let newContent = ''
@@ -59,35 +60,24 @@ export default function CasePage() {
         if (done) break
         newContent += decoder.decode(value, { stream: true })
       }
-
-      // Update just this section in the draft
       const updatedDraft = (c.draft || '').replace(
         new RegExp(`## SECTION: ${section.number}[^#]*`, 's'),
-        newContent + '\n'
+        newContent + '\n',
       )
+      await updateCase(c.id, { draft: updatedDraft })
       const updated = { ...c, draft: updatedDraft, updatedAt: new Date().toISOString() }
-      saveCase(updated)
       setC(updated)
       setParsed(parseDraft(updatedDraft))
       setRegenSection(null)
       setRegenPrompt('')
     } catch {
-      // keep existing content on error
+      // keep existing content
     } finally {
       setRegenLoading(false)
     }
   }
 
-  function handleMarkDone() {
-    if (!c) return
-    setMarkingDone(true)
-    const updated = { ...c, status: 'done' as const, updatedAt: new Date().toISOString() }
-    saveCase(updated)
-    setC(updated)
-    setMarkingDone(false)
-  }
-
-  function handleExportDocx() {
+  function handleExport() {
     if (!c?.draft) return
     const blob = new Blob([c.draft], { type: 'text/plain;charset=utf-8' })
     const url = URL.createObjectURL(blob)
@@ -109,7 +99,6 @@ export default function CasePage() {
     <div className="flex h-screen bg-white overflow-hidden">
       <Sidebar />
       <main className="flex-1 flex flex-col overflow-hidden">
-        {/* Top bar */}
         <div className="flex items-center justify-between px-[24px] h-[60px] border-b border-border flex-none">
           <div className="flex items-center gap-3">
             <Link href="/dashboard">
@@ -128,111 +117,67 @@ export default function CasePage() {
           </div>
           <div className="flex items-center gap-[10px]">
             {c.status !== 'done' && (
-              <Button size="sm" variant="outlined" color="assistive" onClick={handleMarkDone} loading={markingDone}>
-                <CheckCircle2 size={14} className="mr-1" />
-                검토 완료
+              <Button size="sm" variant="outlined" color="assistive" onClick={handleMarkDone}>
+                <CheckCircle2 size={14} className="mr-1" />검토 완료
               </Button>
             )}
-            <Button size="sm" onClick={handleExportDocx} disabled={!c.draft}>
-              <Download size={14} className="mr-1" />
-              내보내기
+            <Button size="sm" onClick={handleExport} disabled={!c.draft}>
+              <Download size={14} className="mr-1" />내보내기
             </Button>
           </div>
         </div>
 
-        {/* Content area */}
-        {c.status === 'generating' ? (
-          <div className="flex-1 flex flex-col items-center justify-center gap-5">
-            <div className="relative w-[56px] h-[56px]">
-              <div className="absolute inset-0 rounded-full border-[3px] border-n-10" />
-              <div className="absolute inset-0 rounded-full border-[3px] border-purple border-t-transparent animate-spin" />
-            </div>
-            <div className="text-center">
-              <div className="text-[17px] font-bold text-n-100 mb-1">AI가 초안을 작성하고 있습니다</div>
-              <div className="text-[13px] text-n-50">페이지를 새로고침하면 완료 여부를 확인할 수 있습니다</div>
-            </div>
-          </div>
-        ) : !c.draft ? (
+        {!c.draft ? (
           <div className="flex-1 flex flex-col items-center justify-center gap-4">
             <div className="text-[15px] text-n-70">초안이 아직 없습니다</div>
-            <Link href="/cases/new">
-              <Button size="md">새 초안 생성</Button>
-            </Link>
+            <Link href="/cases/new"><Button size="md">새 초안 생성</Button></Link>
           </div>
         ) : (
           <div className="flex-1 flex overflow-hidden">
-            {/* Document pane */}
             <div className="flex-1 overflow-auto px-[40px] py-[32px]">
               {parsed ? (
                 <>
-                  {/* Doc header */}
                   <div className="mb-[32px] pb-[24px] border-b border-border">
                     <div className="text-[11px] font-semibold text-n-50 uppercase tracking-widest mb-[8px]">{c.docType}</div>
                     <h1 className="text-[22px] font-bold text-n-100 tracking-[-0.02em] mb-[6px]">{parsed.title || c.name}</h1>
-                    {parsed.caseInfo && (
-                      <div className="text-[13px] text-n-70">{parsed.caseInfo}</div>
-                    )}
+                    {parsed.caseInfo && <div className="text-[13px] text-n-70">{parsed.caseInfo}</div>}
                   </div>
 
-                  {/* Sections */}
                   <div className="space-y-[28px]">
                     {parsed.sections.map((section) => (
                       <div
                         key={section.id}
                         className={clsx(
                           'group rounded-[13px] p-[20px_22px] border transition-all',
-                          activeSection === section.id
-                            ? 'border-blue bg-[#F4F8FF]'
-                            : 'border-transparent hover:border-n-15 hover:bg-n-05',
+                          activeSection === section.id ? 'border-blue bg-[#F4F8FF]' : 'border-transparent hover:border-n-15 hover:bg-n-05',
                         )}
                         onClick={() => setActiveSection(section.id === activeSection ? null : section.id)}
                       >
                         <div className="flex items-start justify-between mb-[10px]">
                           <h2 className="text-[16px] font-bold text-n-100">
-                            <span className="text-blue mr-2">{section.number}.</span>
-                            {section.title}
+                            <span className="text-blue mr-2">{section.number}.</span>{section.title}
                           </h2>
                           <button
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              setRegenSection(section.id)
-                              setActiveSection(section.id)
-                            }}
+                            onClick={e => { e.stopPropagation(); setRegenSection(section.id); setActiveSection(section.id) }}
                             className="opacity-0 group-hover:opacity-100 flex items-center gap-1 text-[12px] text-n-50 hover:text-blue transition-all px-[8px] py-[4px] rounded-[7px] hover:bg-blue-lt"
                           >
-                            <RefreshCw size={12} />
-                            재생성
+                            <RefreshCw size={12} />재생성
                           </button>
                         </div>
                         <div className="text-[14px] text-n-90 leading-[1.85] whitespace-pre-wrap">
                           {renderContent(section.content)}
                         </div>
-
-                        {/* Statute tags */}
                         {section.statutes.length > 0 && (
                           <div className="flex flex-wrap gap-[6px] mt-[14px] pt-[12px] border-t border-n-10">
                             {section.statutes.map((s, i) => (
-                              <span
-                                key={i}
-                                className={clsx(
-                                  'text-[11px] font-semibold px-[9px] py-[4px] rounded-[7px]',
-                                  s.verified
-                                    ? 'bg-[#E6FBF0] text-green-dk'
-                                    : 'bg-[#FFF5E6] text-[#B06000]',
-                                )}
-                              >
+                              <span key={i} className={clsx('text-[11px] font-semibold px-[9px] py-[4px] rounded-[7px]', s.verified ? 'bg-[#E6FBF0] text-green-dk' : 'bg-[#FFF5E6] text-[#B06000]')}>
                                 {s.verified ? '✓' : '⚠'} {s.text}
                               </span>
                             ))}
                           </div>
                         )}
-
-                        {/* Regen panel */}
                         {regenSection === section.id && (
-                          <div
-                            className="mt-[14px] pt-[14px] border-t border-blue/20"
-                            onClick={e => e.stopPropagation()}
-                          >
+                          <div className="mt-[14px] pt-[14px] border-t border-blue/20" onClick={e => e.stopPropagation()}>
                             <div className="flex gap-[8px]">
                               <input
                                 value={regenPrompt}
@@ -241,20 +186,8 @@ export default function CasePage() {
                                 className="flex-1 h-[38px] border border-n-20 rounded-[9px] px-[12px] text-[13px] outline-none focus:border-blue"
                                 onKeyDown={e => e.key === 'Enter' && handleRegenSection(section)}
                               />
-                              <Button
-                                size="sm"
-                                onClick={() => handleRegenSection(section)}
-                                loading={regenLoading}
-                                disabled={regenLoading}
-                              >
-                                재생성
-                              </Button>
-                              <button
-                                onClick={() => { setRegenSection(null); setRegenPrompt('') }}
-                                className="text-[12px] text-n-50 hover:text-n-90 px-2"
-                              >
-                                취소
-                              </button>
+                              <Button size="sm" onClick={() => handleRegenSection(section)} loading={regenLoading} disabled={regenLoading}>재생성</Button>
+                              <button onClick={() => { setRegenSection(null); setRegenPrompt('') }} className="text-[12px] text-n-50 hover:text-n-90 px-2">취소</button>
                             </div>
                           </div>
                         )}
@@ -267,9 +200,7 @@ export default function CasePage() {
               )}
             </div>
 
-            {/* Right panel */}
             <div className="w-[280px] flex-none border-l border-border overflow-auto py-[24px] px-[20px]">
-              {/* Summary */}
               <div className="mb-[24px]">
                 <div className="text-[12px] font-bold text-n-50 uppercase tracking-widest mb-[12px]">검토 요약</div>
                 <div className="space-y-[8px]">
@@ -278,46 +209,30 @@ export default function CasePage() {
                     <span className="font-semibold text-n-100">{parsed?.sections.length ?? 0}개</span>
                   </div>
                   <div className="flex items-center justify-between text-[13px]">
-                    <div className="flex items-center gap-[5px] text-green-dk">
-                      <CheckCircle2 size={13} />
-                      <span>법령 검증 완료</span>
-                    </div>
+                    <div className="flex items-center gap-[5px] text-green-dk"><CheckCircle2 size={13} /><span>법령 검증 완료</span></div>
                     <span className="font-semibold text-green-dk">{verifiedCount}건</span>
                   </div>
                   {unverifiedCount > 0 && (
                     <div className="flex items-center justify-between text-[13px]">
-                      <div className="flex items-center gap-[5px] text-orange">
-                        <AlertTriangle size={13} />
-                        <span>검증 필요</span>
-                      </div>
+                      <div className="flex items-center gap-[5px] text-orange"><AlertTriangle size={13} /><span>검증 필요</span></div>
                       <span className="font-semibold text-orange">{unverifiedCount}건</span>
                     </div>
                   )}
                   {precedentCount > 0 && (
                     <div className="flex items-center justify-between text-[13px]">
-                      <div className="flex items-center gap-[5px] text-purple">
-                        <BookOpen size={13} />
-                        <span>판례 보강 필요</span>
-                      </div>
+                      <div className="flex items-center gap-[5px] text-purple"><BookOpen size={13} /><span>판례 보강 필요</span></div>
                       <span className="font-semibold text-purple">{precedentCount}개 섹션</span>
                     </div>
                   )}
                 </div>
               </div>
 
-              {/* Statute list */}
               {allStatutes.length > 0 && (
                 <div>
                   <div className="text-[12px] font-bold text-n-50 uppercase tracking-widest mb-[12px]">인용 법령</div>
                   <div className="space-y-[6px]">
                     {allStatutes.map((s, i) => (
-                      <div
-                        key={i}
-                        className={clsx(
-                          'flex items-start gap-[7px] text-[12px] p-[8px_10px] rounded-[8px]',
-                          s.verified ? 'bg-[#E6FBF0]' : 'bg-[#FFF5E6]',
-                        )}
-                      >
+                      <div key={i} className={clsx('flex items-start gap-[7px] text-[12px] p-[8px_10px] rounded-[8px]', s.verified ? 'bg-[#E6FBF0]' : 'bg-[#FFF5E6]')}>
                         <span className={s.verified ? 'text-green-dk' : 'text-orange'}>{s.verified ? '✓' : '⚠'}</span>
                         <span className={clsx('leading-snug', s.verified ? 'text-green-dk' : 'text-[#B06000]')}>{s.text}</span>
                       </div>
@@ -326,7 +241,6 @@ export default function CasePage() {
                 </div>
               )}
 
-              {/* Precedent warning */}
               {precedentCount > 0 && (
                 <div className="mt-[20px] bg-purple/10 border border-purple/20 rounded-[10px] p-[12px]">
                   <div className="text-[12px] font-bold text-purple mb-[4px]">판례 인용 안내</div>

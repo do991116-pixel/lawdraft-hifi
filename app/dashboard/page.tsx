@@ -5,7 +5,8 @@ import { FileText, ChevronRight, Search } from 'lucide-react'
 import Sidebar from '@/components/layout/Sidebar'
 import Badge from '@/components/ui/Badge'
 import Chip from '@/components/ui/Chip'
-import { getCases, type Case, type CaseStatus, statusLabel, timeAgo } from '@/lib/storage'
+import { getCases } from '@/lib/db'
+import { type Case, type CaseStatus, statusLabel, timeAgo } from '@/lib/storage'
 import { clsx } from 'clsx'
 
 const statusTone: Record<CaseStatus, 'orange' | 'purple' | 'green' | 'neutral'> = {
@@ -27,9 +28,10 @@ export default function DashboardPage() {
   const [cases, setCases] = useState<Case[]>([])
   const [filter, setFilter] = useState<Filter>('all')
   const [search, setSearch] = useState('')
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    setCases(getCases())
+    getCases().then(data => { setCases(data); setLoading(false) })
   }, [])
 
   const filtered = cases.filter(c => {
@@ -45,7 +47,6 @@ export default function DashboardPage() {
       <Sidebar />
       <main className="flex-1 flex flex-col overflow-hidden">
         <div className="px-[34px] pt-[30px] pb-0">
-          {/* Header row */}
           <div className="flex items-end justify-between mb-[26px]">
             <div>
               <h2 className="text-[25px] font-bold text-n-100 tracking-[-0.023em] mb-[5px]">대시보드</h2>
@@ -64,7 +65,6 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* Stat cards */}
           <div className="grid grid-cols-3 gap-[15px] mb-0">
             <div className="border border-border rounded-[16px] p-[20px_22px]">
               <div className="text-[13px] text-n-70 mb-3">전체 사건</div>
@@ -100,7 +100,6 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Case list */}
         <div className="flex-1 px-[34px] py-[24px] overflow-auto">
           <div className="flex items-center gap-[10px] mb-[14px]">
             <h3 className="text-[17px] font-bold text-n-100 tracking-[-0.01em]">사건 목록</h3>
@@ -111,7 +110,11 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {filtered.length === 0 ? (
+          {loading ? (
+            <div className="flex items-center justify-center h-[200px]">
+              <div className="w-8 h-8 border-2 border-blue border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : filtered.length === 0 ? (
             <div className="border border-dashed border-n-20 rounded-[16px] p-[48px] text-center">
               <FileText size={36} className="text-n-30 mx-auto mb-3" />
               <div className="text-[15px] font-semibold text-n-70 mb-2">

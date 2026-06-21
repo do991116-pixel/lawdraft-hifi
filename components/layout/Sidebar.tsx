@@ -1,9 +1,11 @@
 'use client'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
-import { LayoutDashboard, FolderOpen, BookOpen, Settings, FileText } from 'lucide-react'
+import { usePathname, useRouter } from 'next/navigation'
+import { LayoutDashboard, FolderOpen, BookOpen, Settings, LogOut } from 'lucide-react'
 import { clsx } from 'clsx'
+import { useEffect, useState } from 'react'
 import Button from '@/components/ui/Button'
+import { createClient } from '@/lib/supabase/client'
 
 const nav = [
   { href: '/dashboard', label: '대시보드', icon: LayoutDashboard },
@@ -14,6 +16,32 @@ const nav = [
 
 export default function Sidebar() {
   const pathname = usePathname()
+  const router = useRouter()
+  const [userEmail, setUserEmail] = useState<string | null>(null)
+  const [userName, setUserName] = useState<string | null>(null)
+
+  useEffect(() => {
+    const supabase = createClient()
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) {
+        setUserEmail(user.email ?? null)
+        setUserName(user.user_metadata?.name ?? null)
+      }
+    })
+  }, [])
+
+  async function handleLogout() {
+    const supabase = createClient()
+    await supabase.auth.signOut()
+    router.push('/auth/login')
+    router.refresh()
+  }
+
+  const initials = userName
+    ? userName.slice(0, 1)
+    : userEmail
+    ? userEmail.slice(0, 1).toUpperCase()
+    : '?'
 
   return (
     <aside className="w-[248px] flex-none border-r border-border2 bg-n-05 flex flex-col p-[20px_14px]">
@@ -54,18 +82,25 @@ export default function Sidebar() {
           <span className="w-2 h-2 rounded-full flex-none bg-[#00BF40]" />
           <div>
             <div className="text-xs font-semibold text-green-dk">Gemini 연결됨</div>
-            <div className="text-[11px] text-[#36A45F]">gemini-1.5-pro</div>
+            <div className="text-[11px] text-[#36A45F]">gemini-1.5-pro · 베타 무료</div>
           </div>
         </div>
 
         <div className="flex items-center gap-[10px] px-2 py-[6px]">
-          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#A8C7F0] to-[#7FA8E8] flex items-center justify-center text-[13px] font-bold text-white">
-            <FileText size={14} />
+          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue to-[#0052CC] flex items-center justify-center text-[13px] font-bold text-white flex-none">
+            {initials}
           </div>
-          <div>
-            <div className="text-[13px] font-semibold text-n-100">LawDraft 사용자</div>
-            <div className="text-[11px] text-n-50">Beta</div>
+          <div className="flex-1 min-w-0">
+            <div className="text-[13px] font-semibold text-n-100 truncate">{userName || '사용자'}</div>
+            <div className="text-[11px] text-n-50 truncate">{userEmail}</div>
           </div>
+          <button
+            onClick={handleLogout}
+            className="w-7 h-7 rounded-[7px] flex items-center justify-center text-n-50 hover:text-n-90 hover:bg-n-10 transition-colors"
+            title="로그아웃"
+          >
+            <LogOut size={14} />
+          </button>
         </div>
       </div>
     </aside>

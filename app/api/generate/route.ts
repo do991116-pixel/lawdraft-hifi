@@ -1,9 +1,14 @@
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { NextRequest } from 'next/server'
+import { createClient } from '@/lib/supabase/server'
 import { buildSystemPrompt, buildUserPrompt } from '@/lib/prompts'
 import type { DocType } from '@/lib/storage'
 
 export async function POST(req: NextRequest) {
+  const supabase = createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return new Response('Unauthorized', { status: 401 })
+
   const { docType, prompt, additionalInstructions } = await req.json() as {
     docType: DocType
     prompt: string
