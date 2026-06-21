@@ -4,8 +4,6 @@ import { usePathname } from 'next/navigation'
 import { LayoutDashboard, FolderOpen, BookOpen, Settings, FileText } from 'lucide-react'
 import { clsx } from 'clsx'
 import Button from '@/components/ui/Button'
-import { getApiKey } from '@/lib/storage'
-import { useEffect, useState } from 'react'
 
 const nav = [
   { href: '/dashboard', label: '대시보드', icon: LayoutDashboard },
@@ -16,11 +14,6 @@ const nav = [
 
 export default function Sidebar() {
   const pathname = usePathname()
-  const [hasKey, setHasKey] = useState(false)
-
-  useEffect(() => {
-    setHasKey(!!getApiKey())
-  }, [])
 
   return (
     <aside className="w-[248px] flex-none border-r border-border2 bg-n-05 flex flex-col p-[20px_14px]">
@@ -57,16 +50,11 @@ export default function Sidebar() {
       </nav>
 
       <div className="mt-auto">
-        <div className={clsx(
-          'flex items-center gap-[9px] px-3 py-[11px] rounded-[11px] mb-[10px]',
-          hasKey ? 'bg-[#E5F7EC]' : 'bg-[#F4F4F5]',
-        )}>
-          <span className={clsx('w-2 h-2 rounded-full flex-none', hasKey ? 'bg-[#00BF40]' : 'bg-[#DBDCDF]')} />
+        <div className="flex items-center gap-[9px] px-3 py-[11px] rounded-[11px] mb-[10px] bg-[#E5F7EC]">
+          <span className="w-2 h-2 rounded-full flex-none bg-[#00BF40]" />
           <div>
-            <div className={clsx('text-xs font-semibold', hasKey ? 'text-green-dk' : 'text-n-50')}>
-              {hasKey ? 'Gemini 연결됨' : 'API 키 미연결'}
-            </div>
-            {hasKey && <div className="text-[11px] text-[#36A45F]">gemini-1.5-pro</div>}
+            <div className="text-xs font-semibold text-green-dk">Gemini 연결됨</div>
+            <div className="text-[11px] text-[#36A45F]">gemini-1.5-pro</div>
           </div>
         </div>
 

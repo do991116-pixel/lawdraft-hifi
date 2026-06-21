@@ -1,12 +1,11 @@
 'use client'
 import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { FileText, ChevronRight, Search } from 'lucide-react'
 import Sidebar from '@/components/layout/Sidebar'
 import Badge from '@/components/ui/Badge'
 import Chip from '@/components/ui/Chip'
-import { getCases, getApiKey, type Case, type CaseStatus, statusLabel, timeAgo } from '@/lib/storage'
+import { getCases, type Case, type CaseStatus, statusLabel, timeAgo } from '@/lib/storage'
 import { clsx } from 'clsx'
 
 const statusTone: Record<CaseStatus, 'orange' | 'purple' | 'green' | 'neutral'> = {
@@ -25,18 +24,13 @@ const filters: { key: Filter; label: string }[] = [
 ]
 
 export default function DashboardPage() {
-  const router = useRouter()
   const [cases, setCases] = useState<Case[]>([])
   const [filter, setFilter] = useState<Filter>('all')
   const [search, setSearch] = useState('')
-  const [hasKey, setHasKey] = useState(false)
 
   useEffect(() => {
-    const key = getApiKey()
-    if (!key) { router.replace('/onboarding'); return }
-    setHasKey(true)
     setCases(getCases())
-  }, [router])
+  }, [])
 
   const filtered = cases.filter(c => {
     if (filter !== 'all' && c.status !== filter) return false
@@ -45,8 +39,6 @@ export default function DashboardPage() {
   })
 
   const reviewCount = cases.filter(c => c.status === 'review').length
-
-  if (!hasKey) return null
 
   return (
     <div className="flex h-screen bg-white overflow-hidden">

@@ -6,7 +6,7 @@ import Link from 'next/link'
 import Sidebar from '@/components/layout/Sidebar'
 import Button from '@/components/ui/Button'
 import Chip from '@/components/ui/Chip'
-import { getApiKey, createCase, saveCase, type DocType } from '@/lib/storage'
+import { createCase, saveCase, type DocType } from '@/lib/storage'
 import { clsx } from 'clsx'
 
 const DOC_TYPES: DocType[] = ['의견서', '항소이유서', '고소장', '준비서면', '답변서']
@@ -25,9 +25,6 @@ export default function NewCasePage() {
 
   async function handleGenerate() {
     if (!canGenerate) return
-    const apiKey = getApiKey()
-    if (!apiKey) { router.push('/onboarding'); return }
-
     setGenerating(true)
     setError('')
 
@@ -39,7 +36,6 @@ export default function NewCasePage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          apiKey,
           docType: docType!,
           prompt: prompt.trim(),
           additionalInstructions: instructions.trim() || undefined,

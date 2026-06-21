@@ -4,13 +4,13 @@ import { buildSystemPrompt, buildUserPrompt } from '@/lib/prompts'
 import type { DocType } from '@/lib/storage'
 
 export async function POST(req: NextRequest) {
-  const { apiKey, docType, prompt, additionalInstructions } = await req.json() as {
-    apiKey: string
+  const { docType, prompt, additionalInstructions } = await req.json() as {
     docType: DocType
     prompt: string
     additionalInstructions?: string
   }
 
+  const apiKey = process.env.GEMINI_API_KEY
   if (!apiKey || !docType || !prompt) {
     return new Response('필수 파라미터가 없습니다.', { status: 400 })
   }

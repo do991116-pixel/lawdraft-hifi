@@ -6,7 +6,7 @@ import Link from 'next/link'
 import Sidebar from '@/components/layout/Sidebar'
 import Badge from '@/components/ui/Badge'
 import Button from '@/components/ui/Button'
-import { getCase, getApiKey, saveCase, type Case } from '@/lib/storage'
+import { getCase, saveCase, type Case } from '@/lib/storage'
 import { parseDraft, type ParsedDraft, type DraftSection } from '@/lib/draft-parser'
 import { clsx } from 'clsx'
 
@@ -24,8 +24,6 @@ export default function CasePage() {
   const [markingDone, setMarkingDone] = useState(false)
 
   useEffect(() => {
-    const apiKey = getApiKey()
-    if (!apiKey) { router.replace('/onboarding'); return }
     const caseData = getCase(id)
     if (!caseData) { router.replace('/dashboard'); return }
     setC(caseData)
@@ -36,8 +34,6 @@ export default function CasePage() {
 
   async function handleRegenSection(section: DraftSection) {
     if (!c) return
-    const apiKey = getApiKey()
-    if (!apiKey) return
     setRegenLoading(true)
 
     const sectionPrompt = `다음 섹션을 다시 작성해 주세요:\n섹션 제목: ${section.title}\n원본 내용:\n${section.content}\n\n추가 지시: ${regenPrompt || '없음'}`
@@ -47,7 +43,6 @@ export default function CasePage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          apiKey,
           docType: c.docType,
           prompt: sectionPrompt,
           additionalInstructions: `이 섹션만 ## SECTION: ${section.number}. ${section.title} 형식으로 작성하세요.`,
